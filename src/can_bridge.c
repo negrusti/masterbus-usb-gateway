@@ -9,14 +9,10 @@
 #define MB_CAN_RX_PIN GPIO_PIN_8
 #define MB_CAN_TX_PIN GPIO_PIN_9
 #define MB_CAN_GPIO_PORT GPIOB
-#define MB_CAN_PHY_CTRL0_PIN GPIO_PIN_0
-#define MB_CAN_PHY_CTRL1_PIN GPIO_PIN_1
-#define MB_CAN_PHY_CTRL_GPIOA_PORT GPIOA
 #define MB_CAN_PHY_CTRL2_PIN GPIO_PIN_13
 #define MB_CAN_PHY_CTRL_GPIOC_PORT GPIOC
 
 #define MB_CAN_RX_QUEUE_SIZE 64U
-#define MB_CAN_FIXED_PHY_MODE 0U
 #define MB_CAN_COMBIMASTER_RESP_ID 0x061A026CU
 #define MB_CAN_LEGACY_NAME_STRING_ID_HI 0xFCU
 #define MB_CAN_LEGACY_NAME_STRING_ID_LO 0x00U
@@ -130,40 +126,19 @@ static void mb_can_apply_original_meta(gw_can_frame_t *frame) {
     }
 }
 
-static void mb_can_apply_phy_mode(uint8_t mode) {
-    HAL_GPIO_WritePin(
-        MB_CAN_PHY_CTRL_GPIOA_PORT,
-        MB_CAN_PHY_CTRL0_PIN,
-        ((mode & 0x01U) != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET
-    );
-    HAL_GPIO_WritePin(
-        MB_CAN_PHY_CTRL_GPIOA_PORT,
-        MB_CAN_PHY_CTRL1_PIN,
-        ((mode & 0x02U) != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET
-    );
-    HAL_GPIO_WritePin(
-        MB_CAN_PHY_CTRL_GPIOC_PORT,
-        MB_CAN_PHY_CTRL2_PIN,
-        ((mode & 0x04U) != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET
-    );
-}
-
 static void mb_can_gpio_init(void) {
     GPIO_InitTypeDef gpio = {0};
 
-    __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
 
-    HAL_GPIO_WritePin(MB_CAN_PHY_CTRL_GPIOA_PORT, MB_CAN_PHY_CTRL0_PIN | MB_CAN_PHY_CTRL1_PIN, GPIO_PIN_RESET);
-    gpio.Pin = MB_CAN_PHY_CTRL0_PIN | MB_CAN_PHY_CTRL1_PIN;
+    /* The visible red/blue LEDs are on PA0/PA1 on this CANable clone. Do not
+       drive them here as PHY controls; forcing them low leaves both LEDs on. */
+    HAL_GPIO_WritePin(MB_CAN_PHY_CTRL_GPIOC_PORT, MB_CAN_PHY_CTRL2_PIN, GPIO_PIN_RESET);
+    gpio.Pin = MB_CAN_PHY_CTRL2_PIN;
     gpio.Mode = GPIO_MODE_OUTPUT_PP;
     gpio.Pull = GPIO_NOPULL;
     gpio.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(MB_CAN_PHY_CTRL_GPIOA_PORT, &gpio);
-
-    HAL_GPIO_WritePin(MB_CAN_PHY_CTRL_GPIOC_PORT, MB_CAN_PHY_CTRL2_PIN, GPIO_PIN_RESET);
-    gpio.Pin = MB_CAN_PHY_CTRL2_PIN;
     HAL_GPIO_Init(MB_CAN_PHY_CTRL_GPIOC_PORT, &gpio);
 
     gpio.Pin = MB_CAN_RX_PIN | MB_CAN_TX_PIN;
@@ -245,7 +220,6 @@ void can_bridge_init(void) {
     if (HAL_CAN_Start(&g_hcan) != HAL_OK) {
         return;
     }
-    mb_can_apply_phy_mode(MB_CAN_FIXED_PHY_MODE);
 }
 
 bool can_bridge_send_frame(const gw_can_frame_t *frame) {
