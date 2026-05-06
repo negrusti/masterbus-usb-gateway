@@ -11,13 +11,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        environment:
-          - canable_gateway_f072cb
-          - mastervolt_gateway_f072
-          - mastervolt_gateway_f042
-
     steps:
       - uses: actions/checkout@v4
 
@@ -25,8 +18,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: platformio-${{ matrix.environment }}-${{ hashFiles('platformio.ini') }}
-          restore-keys: platformio-${{ matrix.environment }}-
+          key: platformio-${{ hashFiles('platformio.ini') }}
+          restore-keys: platformio-
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -36,17 +29,14 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build ${{ matrix.environment }}
-        run: pio run -e ${{ matrix.environment }}
-
-      - name: Stage firmware
-        run: cp .pio/build/${{ matrix.environment }}/firmware.bin firmware-${{ matrix.environment }}.bin
+      - name: Build canable_gateway_f072cb
+        run: pio run -e canable_gateway_f072cb
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.environment }}
-          path: firmware-${{ matrix.environment }}.bin
+          name: firmware
+          path: .pio/build/canable_gateway_f072cb/firmware.bin
           if-no-files-found: error
 
   release:
@@ -57,13 +47,11 @@ jobs:
       contents: write
 
     steps:
-      - name: Download all firmware artifacts
+      - name: Download firmware artifact
         uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "*.bin"
+          artifacts: "firmware/firmware.bin"
           generateReleaseNotes: true
