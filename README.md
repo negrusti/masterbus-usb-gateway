@@ -25,11 +25,29 @@ pio run -e canable_gateway_f072cb
 
 ## Flash
 
+### With PlatformIO
+
 Put the board into STM32 DFU mode, then run:
 
 ```powershell
 pio run -e canable_gateway_f072cb -t upload
 ```
+
+### With STM32CubeProgrammer
+
+Download the latest `firmware.bin` from the [Releases](../../releases/latest) page,
+then flash it using [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html):
+
+1. Hold the **BOOT** button on the board while plugging in USB to enter DFU mode.
+   The board should appear as `STM32 BOOTLOADER` in Device Manager.
+2. Open STM32CubeProgrammer and select **USB** as the connection type.
+3. Click **Connect**.
+4. Go to the **Erasing & Programming** tab.
+5. Under **File Path**, browse to `firmware.bin`.
+6. Set **Start address** to `0x08000000`.
+7. Check **Verify programming** and **Run after programming**.
+8. Click **Start Programming**.
+9. Unplug and replug the board — it will boot the new firmware.
 
 ## Notes
 
