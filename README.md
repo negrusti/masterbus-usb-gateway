@@ -7,13 +7,13 @@ This project is an independent, unofficial MasterBus-compatible USB CAN gateway.
 It is not affiliated with, endorsed by, or sponsored by Mastervolt. Mastervolt
 and MasterAdjust are trademarks of their respective owners.
 
-## Hardware
+## Compatible boards
 
-This firmware was successfully tested on a CANable V1.0 board from AliExpress:
-https://fr.aliexpress.com/item/1005005721849902.html
+| Board | Chip | Link |
+|-------|------|------|
+| CANable V1.0 (STM32F072CB variant) | STM32F072CB | [AliExpress](https://aliexpress.com/item/1005005721849902.html) |
 
-The tested board uses an STM32F072CB-class MCU and the project builds with the
-custom PlatformIO board definition in `boards/canable_f072cb.json`.
+The project builds with the custom PlatformIO board definition in `boards/canable_f072cb.json`.
 
 ## Build
 
