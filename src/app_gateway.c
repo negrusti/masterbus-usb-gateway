@@ -56,9 +56,7 @@ void app_gateway_poll(void) {
                 if (!gw_packet14_to_can(&hid_view.slots[i], hid_view.meta_low[i], &frame)) {
                     continue;
                 }
-                if (can_bridge_send_frame(&frame)) {
-                    board_leds_pulse_tx();
-                }
+                (void)can_bridge_send_frame(&frame);
             }
         }
     }

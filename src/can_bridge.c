@@ -13,6 +13,7 @@
 #define MB_CAN_PHY_CTRL_GPIOC_PORT GPIOC
 
 #define MB_CAN_RX_QUEUE_SIZE 64U
+#define MB_CAN_TX_QUEUE_SIZE 64U
 #define MB_CAN_COMBIMASTER_RESP_ID 0x061A026CU
 #define MB_CAN_LEGACY_NAME_STRING_ID_HI 0xFCU
 #define MB_CAN_LEGACY_NAME_STRING_ID_LO 0x00U
@@ -22,9 +23,13 @@
 #define MB_CAN_HID_RESERVED_TAIL2 0x80U
 static CAN_HandleTypeDef g_hcan;
 static gw_can_frame_t g_rx_queue[MB_CAN_RX_QUEUE_SIZE];
+static gw_can_frame_t g_tx_queue[MB_CAN_TX_QUEUE_SIZE];
 static uint8_t g_rx_head;
 static uint8_t g_rx_tail;
 static uint8_t g_rx_count;
+static uint8_t g_tx_head;
+static uint8_t g_tx_tail;
+static uint8_t g_tx_count;
 static uint16_t g_can_rx_meta_seq;
 
 static void mb_can_put_hid_slot(gw_hid_report_view_t *out, uint8_t slot, const gw_can_frame_t *frame) {
@@ -177,6 +182,67 @@ static bool mb_can_queue_pop(gw_can_frame_t *frame) {
     return true;
 }
 
+static bool mb_can_tx_queue_push(const gw_can_frame_t *frame) {
+    if ((frame == NULL) || (g_tx_count >= MB_CAN_TX_QUEUE_SIZE)) {
+        return false;
+    }
+
+    g_tx_queue[g_tx_head] = *frame;
+    g_tx_head = (uint8_t)((g_tx_head + 1U) % MB_CAN_TX_QUEUE_SIZE);
+    ++g_tx_count;
+    return true;
+}
+
+static bool mb_can_tx_queue_peek(gw_can_frame_t *frame) {
+    if ((frame == NULL) || (g_tx_count == 0U)) {
+        return false;
+    }
+
+    *frame = g_tx_queue[g_tx_tail];
+    return true;
+}
+
+static void mb_can_tx_queue_drop_front(void) {
+    if (g_tx_count == 0U) {
+        return;
+    }
+
+    g_tx_tail = (uint8_t)((g_tx_tail + 1U) % MB_CAN_TX_QUEUE_SIZE);
+    --g_tx_count;
+}
+
+static bool mb_can_load_tx_mailbox(const gw_can_frame_t *frame) {
+    CAN_TxHeaderTypeDef header = {0};
+    uint32_t mailbox;
+
+    if ((frame == NULL) || (HAL_CAN_GetTxMailboxesFreeLevel(&g_hcan) == 0U)) {
+        return false;
+    }
+
+    header.IDE = CAN_ID_EXT;
+    header.ExtId = frame->ext_id & 0x1FFFFFFFU;
+    header.RTR = CAN_RTR_DATA;
+    header.DLC = frame->dlc & 0x0FU;
+    header.TransmitGlobalTime = DISABLE;
+
+    return HAL_CAN_AddTxMessage(&g_hcan, &header, (uint8_t *)frame->data, &mailbox) == HAL_OK;
+}
+
+static void mb_can_drain_tx_queue(void) {
+    while ((g_tx_count != 0U) && (HAL_CAN_GetTxMailboxesFreeLevel(&g_hcan) != 0U)) {
+        gw_can_frame_t frame;
+
+        if (!mb_can_tx_queue_peek(&frame)) {
+            break;
+        }
+        if (!mb_can_load_tx_mailbox(&frame)) {
+            break;
+        }
+        mb_can_tx_queue_drop_front();
+        board_leds_pulse_tx();
+    }
+}
+
 void can_bridge_init(void) {
     CAN_FilterTypeDef filter = {0};
 
@@ -199,6 +265,9 @@ void can_bridge_init(void) {
     g_rx_head = 0U;
     g_rx_tail = 0U;
     g_rx_count = 0U;
+    g_tx_head = 0U;
+    g_tx_tail = 0U;
+    g_tx_count = 0U;
 
     if (HAL_CAN_Init(&g_hcan) != HAL_OK) {
         return;
@@ -223,20 +292,12 @@ void can_bridge_init(void) {
 }
 
 bool can_bridge_send_frame(const gw_can_frame_t *frame) {
-    CAN_TxHeaderTypeDef header = {0};
-    uint32_t mailbox;
-
     if (frame == NULL) {
         return false;
     }
 
-    header.IDE = CAN_ID_EXT;
-    header.ExtId = frame->ext_id & 0x1FFFFFFFU;
-    header.RTR = CAN_RTR_DATA;
-    header.DLC = frame->dlc & 0x0FU;
-    header.TransmitGlobalTime = DISABLE;
-
-    if (HAL_CAN_AddTxMessage(&g_hcan, &header, (uint8_t *)frame->data, &mailbox) == HAL_OK) {
+    if (mb_can_tx_queue_push(frame)) {
+        mb_can_drain_tx_queue();
         return true;
     }
 
@@ -244,6 +305,8 @@ bool can_bridge_send_frame(const gw_can_frame_t *frame) {
 }
 
 void can_bridge_poll(void) {
+    mb_can_drain_tx_queue();
+
     while (HAL_CAN_GetRxFifoFillLevel(&g_hcan, CAN_RX_FIFO0) > 0U) {
         CAN_RxHeaderTypeDef header = {0};
         gw_can_frame_t frame;
@@ -263,6 +326,8 @@ void can_bridge_poll(void) {
         mb_can_queue_push(&frame);
         board_leds_pulse_rx();
     }
+
+    mb_can_drain_tx_queue();
 }
 
 bool can_bridge_pop_hid_report(gw_hid_report_view_t *out) {
